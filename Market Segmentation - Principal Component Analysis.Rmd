@@ -4,7 +4,7 @@ output: html_notebook
 ---
 
 ```{r}
-setwd("C:/Users/akishore/OneDrive - HCL Technologies Ltd/Abhishek Kishore Personal/Training/GreatLearning/WorkingDirectory")
+setwd("//WorkingDirectory")
 
 FactoHair = read.csv("Factor-Hair-Revised.csv", header = T)
 
