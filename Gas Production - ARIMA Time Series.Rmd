@@ -1,0 +1,367 @@
+---
+title: "Project Time Series"
+author: "Abhishek Kishore"
+date: "22 July 2019"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Objective
+The objective of this project is to analyze the gas (Australian monthly gas production) dataset available in "Forecast"" package and perform the Time Series Analysis. The objective also includes to find the following details:
+
+1. Which components of the time series are present in this dataset?
+2. What is the periodicity of dataset?
+3. Is the time series Stationary? 
+4. Conduct an ADF test.
+5. De-seasonalise the series if seasonality is present.
+6. Develop an ARIMA Model to forecast for next 12 periods, using manual and auto.arima.
+7. Report the accuracy of the model
+
+```{r, echo=FALSE}
+# clear objects
+rm(list = ls())
+```
+
+
+## Loading data
+
+```{r gas}
+library(forecast)
+data(gas)
+```
+
+## Exploratory Data Analysis
+
+```{r}
+start(gas)
+
+end(gas)
+
+frequency(gas)
+
+sum(is.na(gas))
+
+plot(gas, main = "Monthly Gas Production")
+abline(reg = lm(gas~time(gas)), col = "blue")
+```
+```{r}
+by(gas, INDICES = cycle(gas), FUN = summary)
+
+boxplot(gas~cycle(gas), col = "blue", main = "Boxplot across months")
+
+seasonplot(gas)
+```
+
+* **Observations**
+    + The dataset contains monthly data starting 01/1965, untill 08/1995.
+    + The gas production is on increasing trend.
+    + There are no outliers or missing values.
+    + Data untill 12/1970 remains pretty flat in relation to data beyond 12/1970.
+    + The production is highest in the months of May, Jun, Jul and Aug. This increase could be due to winter season in Austrila during the period of Jun to Aug.
+    + The production increase during given months indicates seasonality.
+    + The series is multiplicative as there is a increase in production variance over time.
+
+## Checking Seasonality, Trend and Error Components
+
+```{r}
+plot(stl(gas, s.window = "periodic"))
+#plot(stl(gas, s.window = 5))
+```
+
+* **Observations**
+    + It can be noticed that both trend and seasonality have an affect along with random component (remainder).
+    + Trend is more significant than seasonality.
+
+## Gas Production against Deseasonlized Gas Production    
+
+```{r}
+# Trend + Remainder
+gas_decomposed = stl(gas, s.window = "periodic")
+#gas_deseason = gas_decomposed$time.series[,2] + gas_decomposed$time.series[,3]
+gas_deseason = seasadj(gas_decomposed)
+
+ts.plot(gas,gas_deseason, col = c("red", "blue"), main = "Gas Production: Actual vs Deseasonalized")
+```
+
+* **Observations**
+    + Despite taking out the seasonality factor, the gas production has an increasing trend.
+
+## Model Formation
+
+### Random Walk with Drift
+
+```{r}
+gas_train = window(gas, start = c(1971,1), end = c(1992,12), frequency = 12)
+gas_test = window(gas, start = c(1993,1), frequency = 12)
+
+gas_train_decomposed = stl(gas_train, s.window = "periodic")
+
+gas_forecast_rwdrift = forecast(gas_train_decomposed, method = "rwdrift", h = 33)
+
+ts.plot(gas_test, gas_forecast_rwdrift$mean, col = c("blue", "red"), main = "Gas Production: Actual vs Forecast")
+
+# Accuracy of the model
+round(accuracy(gas_forecast_rwdrift, gas_test),2)
+```
+
+**Box Ljung Test for RWDrift Model**
+
+    + H0: Residuals are independent
+    + Ha: Residuals are not independent
+
+```{r}
+Box.test(gas_forecast_rwdrift$residuals, type="Ljung-Box")
+```
+
+* **Observations**
+    + As the p-value is more than 5%, hence we fail to reject the NULL hypothesis.
+    + As "Residuals are independent", the model is an acceptable model.
+
+### Simple Exponential Smoothing (SES) Model
+
+```{r}
+library(fpp2)
+
+# Taking the diff of gas to remove the trend which is there in the TS
+gas_ses_train = window(diff(gas), start = c(1971,1), end = c(1992,12), frequency = 12)
+gas_ses_test = window(diff(gas), start = c(1993,1), frequency = 12)
+
+gas_ses = ses(gas_ses_train, alpha = 0.5 ,h=12)
+
+ts.plot(diff(gas), gas_ses$fitted, col = c("blue", "red"))
+
+gas_ses$model
+
+plot(gas_ses)
+
+round(accuracy(gas_ses,gas_ses_test),2)
+```
+
+**Box Ljung Test for SES Model**
+
+    + H0: Residuals are independent
+    + Ha: Residuals are not independent
+
+```{r}
+Box.test(gas_ses$residuals, type="Ljung-Box")
+```
+
+* **Observations**
+    + As the p-value is more than 5%, hence we fail to reject the NULL hypothesis.
+    + As "Residuals are independent", the model is an acceptable model.
+
+```{r}
+gas_ses_forecast = forecast(gas_ses, h=12)
+
+plot(gas_ses_forecast)
+```
+
+### ARIMA Modeling
+
+#### Check for stationarity
+Hypothesis as per Augumented Dickey Fuller test:
+
+  + H0: The time series is not stationary
+  + Ha: The time series is stationary
+
+```{r}
+library(tseries)
+# Augumented Dicky Fuller test for stationarity
+adf.test(gas)
+```
+
+* **Observations**
+    + The p-value of 27.64% is more than the threshold value of 5%.Hence, we fail to reject the NULL hypothesis.
+    + To stationarize the series, we shall perform the difference operation.
+
+```{r}
+gas_diff = diff(gas_deseason, differences = 1)
+
+plot(gas_diff)
+
+# Augumented Dicky Fuller test for stationarity
+adf.test(gas_diff)
+```
+
+* **Observations**
+    + Post difference operation the p-value is 1%, which is less than 5% threshold.
+    + The null hypothesis is hence rejected, for the difference series.
+    + The order of difference is 1. Hence value of d = 1.
+
+```{r}
+# Autocorrelation ACF
+# Since the gas_diff is stationary, ACF will be done on gas_diff
+acf(gas_diff, main = "ACF for differenced series")
+```
+
+* **Observations**
+    + The first significant correlation post ACF(0) is ACF(1). Hence value of q = 1.
+    + A repetative pattern can be observed indicating seasonality.
+
+```{r}
+# Partial autocorrelation
+# Since the gas_diff is stationary, PACF will be done on gas_diff
+pacf(gas_diff, main = "PACF for differenced series")
+```
+
+* **Observations**
+    + The first significant partial correlation is PACF(1).
+    + Value of p = 1
+
+```{r}
+# Spliting data for ARIMA forecasting
+gas_diff_train = window(gas_deseason, start = c(1971,1), end = c(1992,12), frequency = 12)
+gas_diff_test = window(gas_deseason, start = c(1993,1), frequency = 12)
+
+gas_arima = arima(gas_diff_train, order = c(1,1,1))
+
+gas_arima
+
+plot(gas_arima$residuals)
+
+tsdisplay(residuals(gas_arima))
+```
+**Box Ljung Test for RWDrift Model**
+
+    + H0: Residuals are independent
+    + Ha: Residuals are not independent
+
+```{r}
+Box.test(gas_arima$residuals, type="Ljung-Box")
+```
+
+* **Observations**
+    + As the p-value is more than 5%, hence we fail to reject the NULL hypothesis.
+    + As "Residuals are independent", the model is an acceptable model.
+
+```{r}
+gas_arima_forecast = forecast(gas_arima, h=12)
+
+plot(gas_arima_forecast)
+```
+```{r}
+round(accuracy(gas_arima_forecast, gas_diff_test),2)
+```
+
+```{r}
+gas_auto_arima = auto.arima(gas_diff_train, seasonal = FALSE)
+
+gas_auto_arima
+
+plot(gas_auto_arima$residuals)
+
+tsdisplay(residuals(gas_auto_arima))
+```
+
+**Box Ljung Test for RWDrift Model**
+
+    + H0: Residuals are independent
+    + Ha: Residuals are not independent
+
+```{r}
+Box.test(gas_auto_arima$residuals, type="Ljung-Box")
+```
+
+* **Observations**
+    + As the p-value is more than 5%, hence we fail to reject the NULL hypothesis.
+    + As "Residuals are independent", the model is an acceptable model.
+
+```{r}
+gas_auto_arima_forecast = forecast(gas_auto_arima, h=12)
+
+plot(gas_auto_arima_forecast)
+```
+```{r}
+round(accuracy(gas_auto_arima_forecast, gas_diff_test),2)
+```
+
+### Holt Winter Modeling
+
+```{r}
+# Spliting data for Holt Winter Modeling
+gas_hw_train = window(gas, start = c(1971,1), end = c(1992,12), frequency = 12)
+gas_hw_test = window(gas, start = c(1993,1), frequency = 12)
+
+gas_hw = HoltWinters(gas_hw_train, seasonal = "a") # default seasonality is ADDITIVE
+
+plot(gas_hw)
+
+gas_hw_Multiplicative = HoltWinters(gas_hw_train, seasonal = "m") # M for multiplicative
+
+plot(gas_hw_Multiplicative)
+#ts.plot(gas, gas_hw$fitted, col=c("blue","red"))
+```
+```{r}
+gas_hw_forecast = forecast(gas_hw, h = 12)
+
+ts.plot(gas_hw_test, gas_hw_forecast$fitted, col=c("blue","red"), main = "Actual v/s Forecast (Additive)")
+
+gas_hw_Multiplicative_forecast = forecast(gas_hw_Multiplicative, h = 72)
+
+ts.plot(gas_hw_test, gas_hw_Multiplicative_forecast$fitted, col=c("blue","red"), main = "Actual v/s Forecast (Multiplicative)")
+```
+
+**Box Ljung Test for Holt Winter Model (Additive)**
+
+    + H0: Residuals are independent
+    + Ha: Residuals are not independent
+
+```{r}
+Box.test(gas_hw_forecast$residuals, type="Ljung-Box")
+```
+
+* **Observations**
+    + For additive model the p-value is less than 5%. Hence the NULL hypothesis is rejected.
+    + For additive , "Residuals are not independent". Hence the model is not a good model.
+
+**Box Ljung Test for Holt Winter Model (Multiplicative)**
+
+    + H0: Residuals are independent
+    + Ha: Residuals are not independent
+
+```{r}
+Box.test(gas_hw_Multiplicative_forecast$residuals, type="Ljung-Box")
+```
+
+* **Observations**
+    + For additive model the p-value is more than 5%. Hence we fail to reject the NULL hypothesis.
+    + For multiplicative model, "Residuals are independent". Hence the model is an acceptable model.
+
+```{r}
+#accuracy(gas_hw_forecast, gas_hw_test)
+round(accuracy(gas_hw_Multiplicative_forecast, gas_hw_test),2)
+```
+
+# Conclusion
+
+Below are MAPE and Box-Ljung test observations (p-value) for Models.
+
+  + Random Walk with Drift:
+    + MAPE: 8.72
+    + p-value = 0.1697
+    
+  + SES Model:
+    + MAPE: 285.23
+    + p-value = 0.9634
+    
+  + ARIMA Model:
+    + MAPE: 11.97
+    + p-value = 0.629
+    
+  + Holt Winter Model:
+    + MAPE: 7.28
+    + p-value = 0.7235
+    
+**MAPE for Holt Winter Model (Multiplictive) is the least and hence should be used for forecasting.**
+
+```{r}
+gas_hw_model = HoltWinters(gas, seasonal = "m")
+plot(forecast(gas_hw_model,h=12))
+   ```
+
