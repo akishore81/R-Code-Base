@@ -13,7 +13,7 @@ The objective of the project is to predict whether or not an employee will use C
 ```{r echo=FALSE}
 rm(list = ls())
 
-setwd("C:/Users/akishore/OneDrive - HCL Technologies Ltd/Abhishek Kishore Personal/Training/GreatLearning/7 Machine Learning/Project")
+setwd("//WorkingDirectory")
 ```
 
 ## Load Data
