@@ -1,0 +1,552 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+# clear objects
+rm(list = ls())
+
+# Set working directory
+setwd("C:/Users/akishore/OneDrive - HCL Technologies Ltd/Abhishek Kishore Personal/Training/GreatLearning/5 Predictive Modeling/Project")
+
+# Load required libraries
+library(xlsx)
+
+# Read LA 2017 Data and Process it
+
+# Reading only UP data.
+LA2017 = read.xlsx("LA 2017_Modified.xls", sheetName = "Candidate", header = T)
+
+# Adding Key column for the data
+LA2017$CONS_CAND = paste(trimws(LA2017$CONSTITUENCY),"-",trimws(LA2017$CAND_NAME))
+
+#LA2017$WON = as.factor(ifelse(LA2017$POSITION == 1, 1, 0))
+
+names(LA2017)
+
+# remove AC_TYPE
+LA2017 = LA2017[,-c(2)]
+
+#LA2017$MONTH = as.factor(LA2017$MONTH)
+#LA2017$YEAR = as.factor(LA2017$YEAR)
+#LA2017$POSITION = as.factor(LA2017$POSITION)
+#LA2017$AC_NO = as.factor(LA2017$AC_NO)
+LA2017$CAND_AGE = as.numeric(LA2017$CAND_AGE)
+LA2017$PARTYABBRE = as.factor(LA2017$PARTYABBRE)
+
+LA2017$CAND_NAME = toupper(trimws(LA2017$CAND_NAME))
+#LA2017$AC_NAME = toupper(trimws(LA2017$AC_NAME))
+LA2017$PARTYABBRE = toupper(trimws(LA2017$PARTYABBRE))
+
+#View(LA2017.UP)
+
+names(LA2017)[names(LA2017) == "TOTALVALIDVOTESPOLLED"] = "TOTVOTPOLL"
+
+LA2017 = unique(LA2017)
+
+#View(LA2017)
+
+str(LA2017)
+```
+```{r}
+# Read Myneta Data and Process it
+MyNeta = read.xlsx("MyNeta.xlsx", sheetName = "Sheet1", header = T)
+
+#View(MyNeta)
+
+MyNeta = na.omit(MyNeta)
+
+MyNeta$Candidate = as.character(MyNeta$Candidate)
+
+MyNeta$Total.Assets = 
+  as.numeric(gsub(",","",substr(MyNeta$Total.Assets,5,nchar(as.character(MyNeta$Total.Assets)))))
+
+MyNeta$Liabilities = 
+  as.numeric(gsub(",","",substr(MyNeta$Liabilities,5,nchar(as.character(MyNeta$Liabilities)))))
+
+MyNeta$Assets.In.crores = round(MyNeta$Total.Assets/10000000,2)
+MyNeta$Liabilities.In.crores = round(MyNeta$Liabilities/10000000,2)
+
+MyNeta$Candidate = toupper(trimws(MyNeta$Candidate))
+MyNeta$Constituency = toupper(trimws(MyNeta$Constituency))
+#MyNeta$Party = toupper(MyNeta$Party)
+
+MyNeta$Education = as.character(MyNeta$Education)
+
+# Add Key column to data
+MyNeta$NETA_CONS_CAND = paste(trimws(MyNeta$Constituency),"-",trimws(MyNeta$Candidate)) 
+
+# Remove, Sno, Total.Assest, Liabilities.
+MyNeta = MyNeta[,-c(1,7,8)]
+
+#View(MyNeta)
+
+# Output data to add Party Abbreviation using VLOOKUP in XLS
+#write.csv(x = MyNeta.Processed, "MyNeta_Processed.csv")
+
+# Read the modifiled data with Party Abbreviations
+# MyNeta.Processed = read.csv("MyNeta_Processed.csv", header = T)
+
+MyNeta = unique(MyNeta)
+
+str(MyNeta)
+```
+```{r}
+library(fuzzyjoin)
+library(dplyr)
+
+LA2017_MyNeta = LA2017 %>% stringdist_left_join(MyNeta, by = c(CONS_CAND = "NETA_CONS_CAND"), max_dist = 0.05)
+
+str(LA2017_MyNeta)
+
+colSums(is.na(LA2017_MyNeta))
+#View(LA2017_MyNeta)
+#is.na(LA2017_MyNeta$Candidate)
+```
+```{r}
+for (i in 1: dim(LA2017_MyNeta)[1]){
+  if (LA2017_MyNeta$Candidate[i] == "NA" | is.na(LA2017_MyNeta$Candidate[i])){
+    x = agrep(LA2017_MyNeta$CONS_CAND[i], MyNeta$NETA_CONS_CAND,ignore.case = TRUE, value = TRUE,
+            max.distance = 0.1, useBytes = TRUE)
+    
+    LA2017_MyNeta$Candidate[i] = ifelse(length(MyNeta$Candidate[which(MyNeta$NETA_CONS_CAND == trimws(x))]) != 0, MyNeta$Candidate[which(MyNeta$NETA_CONS_CAND == trimws(x))], "NA")
+    
+    LA2017_MyNeta$Constituency[i] = ifelse(length(MyNeta$Constituency[which(MyNeta$NETA_CONS_CAND == trimws(x))]) != 0, MyNeta$Constituency[which(MyNeta$NETA_CONS_CAND == trimws(x))], "NA")
+    
+    LA2017_MyNeta$Party[i] = ifelse(length(MyNeta$Party[which(MyNeta$NETA_CONS_CAND == trimws(x))]) != 0, MyNeta$Party[which(MyNeta$NETA_CONS_CAND == trimws(x))], "NA")
+    
+    LA2017_MyNeta$Criminal.Case[i] = ifelse(length(MyNeta$Criminal.Case[which(MyNeta$NETA_CONS_CAND == trimws(x))]) != 0, MyNeta$Criminal.Case[which(MyNeta$NETA_CONS_CAND == trimws(x))], "NA")
+    
+    LA2017_MyNeta$Education[i] = ifelse(length(MyNeta$Education[which(MyNeta$NETA_CONS_CAND == trimws(x))]) != 0, MyNeta$Education[which(MyNeta$NETA_CONS_CAND == trimws(x))], "NA")
+    
+    LA2017_MyNeta$Assets.In.crores[i] = ifelse(length(MyNeta$Assets.In.crores[which(MyNeta$NETA_CONS_CAND == trimws(x))]) != 0, MyNeta$Assets.In.crores[which(MyNeta$NETA_CONS_CAND == trimws(x))], "NA")
+    
+    LA2017_MyNeta$Liabilities.In.crores[i] = ifelse(length(MyNeta$Liabilities.In.crores[which(MyNeta$NETA_CONS_CAND == trimws(x))]) != 0, MyNeta$Liabilities.In.crores[which(MyNeta$NETA_CONS_CAND == trimws(x))], "NA")
+    
+    LA2017_MyNeta$NETA_CONS_CAND[i] = ifelse(length(MyNeta$NETA_CONS_CAND[which(MyNeta$NETA_CONS_CAND == trimws(x))]) != 0, MyNeta$NETA_CONS_CAND[which(MyNeta$NETA_CONS_CAND == trimws(x))], "NA")
+  }
+}
+
+colSums(is.na(LA2017_MyNeta))
+
+# Remving records for which match not found
+#LA2017_MyNeta = LA2017_MyNeta[-which(LA2017_MyNeta$Candidate == "NA"),]
+
+# Removing Party
+#LA2017_MyNeta = LA2017_MyNeta[,-c(12)]
+
+names(LA2017_MyNeta)
+
+#LA2017_MyNeta = na.omit(LA2017_MyNeta)
+
+# Selecting only the required columns
+SampleData = LA2017_MyNeta[,c("CAND_SEX","CAND_CATEGORY","CAND_AGE","Education","Assets.In.crores","Liabilities.In.crores","TOTVOTPOLL","POSITION")]
+
+# Removing the solo record where SEx = O
+#SampleData = SampleData[-which(SampleData$CAND_SEX == "O"),]
+
+str(SampleData)
+```
+```{r}
+SampleData$Education = as.factor(SampleData$Education)
+SampleData$Assets.In.crores = as.numeric(SampleData$Assets.In.crores)
+SampleData$Liabilities.In.crores = as.numeric(SampleData$Liabilities.In.crores)
+
+summary(SampleData)
+```
+```{r}
+# NA treatment
+SampleData$Assets.In.crores[which(is.na(SampleData$Assets.In.crores))] = round(mean(SampleData$Assets.In.crores, na.rm = T))
+
+SampleData$Liabilities.In.crores[which(is.na(SampleData$Liabilities.In.crores))] = round(mean(SampleData$Liabilities.In.crores, na.rm = T))
+
+# Calculating new Column
+SampleData$NetWorth.In.Crores = SampleData$Assets.In.crores - SampleData$Liabilities.In.crores
+
+summary(SampleData)
+```
+
+
+```{r}
+# Dummy encoding for factor variables
+SampleData$MALE = ifelse(SampleData$CAND_SEX =="M",1,0)
+SampleData$FEMALE = ifelse(SampleData$CAND_SEX =="F",1,0)
+SampleData$THIRD_GENDER = ifelse(SampleData$CAND_SEX =="O",1,0)
+
+SampleData$CAT_GEN = ifelse(SampleData$CAND_CATEGORY =="GEN",1,0)
+SampleData$CAT_SC = ifelse(SampleData$CAND_CATEGORY =="SC",1,0)
+SampleData$CAT_ST = ifelse(SampleData$CAND_CATEGORY =="ST",1,0)
+
+SampleData$DOCTORATE = ifelse(SampleData$Education =="Doctorate",1,0)
+SampleData$POST_GRADUATE = ifelse(SampleData$Education =="Post Graduate",1,0)
+SampleData$GRADUATE = ifelse(SampleData$Education =="Graduate",1,0)
+SampleData$GRADUATE_Prof = ifelse(SampleData$Education =="Graduate Professional",1,0)
+SampleData$HIGHER_SECONDARY = ifelse(SampleData$Education =="12th Pass",1,0)
+SampleData$SECONDARY = ifelse(SampleData$Education =="10th Pass",1,0)
+SampleData$EIGTH_PASS = ifelse(SampleData$Education =="8th Pass" ,1,0)
+SampleData$LITERATE = ifelse(SampleData$Education =="Literate",1,0)
+SampleData$OTHERS = ifelse(SampleData$Education =="Others",1,0)
+SampleData$ILLITERATE = ifelse(SampleData$Education =="Illiterate",1,0)
+SampleData$NOT_GIVEN = ifelse(SampleData$Education =="Not Given",1,0)
+
+SampleData$Winner = ifelse(SampleData$POSITION == 1 | SampleData$POSITION == 2 | SampleData$POSITION == 3,1,0)
+
+#as.list(unique(SampleData$Education))
+
+names(SampleData)
+```
+```{r}
+prop.table(table(SampleData$Winner))
+```
+```{r}
+# ===============
+# Data Partition
+# ===============
+# Creating Training and Testing Dataset with 70:30 proportion
+
+set.seed(111)
+
+trainIndex = createDataPartition(SampleData$Winner, p = 0.7, list = FALSE, times = 1)
+
+train.data = SampleData[trainIndex,]
+test.data = SampleData[-trainIndex,]
+
+# Keeping the required columns only for logistic regression
+train.logit = train.data[,c(3,9:27)]
+test.logit = test.data[,c(3,5,9:27)]
+
+names(train.logit)
+```
+```{r}
+library(corrplot)
+
+corrplot(cor(train.logit), method = "pie", na.label = "NA", number.cex = 0.5)
+```
+```{r}
+Logit.eq = Winner~
+  CAND_AGE+
+  NetWorth.In.Crores+
+  #FEMALE+
+  MALE+
+  #THIRD_GENDER+
+  CAT_GEN+
+  #CAT_SC+
+  CAT_ST+
+  DOCTORATE+POST_GRADUATE+GRADUATE+GRADUATE_Prof+HIGHER_SECONDARY+SECONDARY+EIGTH_PASS+
+  LITERATE+OTHERS+ILLITERATE+NOT_GIVEN
+
+Logit = glm(Logit.eq, data = train.logit, family = binomial)
+
+summary(Logit)
+```
+```{r}
+library(car)
+vif(Logit)
+
+#alias(Logit)
+
+# eliminate variables with a VIF higher than 5.
+# No variables with VIF> 5. Hence no action
+```
+```{r}
+predicted = predict(Logit, newdata = test.data, type = "response")
+actual = test.data$Winner
+
+confusion.matrix(actual,predicted, threshold = 0.5)
+```
+```{r}
+library(InformationValue)
+# percentage mismatch of predcited vs actuals. The lower the misclassification error, the better the model.
+
+misClassError(actual,predicted, threshold = 0.5)
+```
+
+
+```{r}
+#roc(actual, predicted)
+plotROC(actual, predicted)
+```
+```{r}
+Concordance(actual,predicted)
+```
+```{r}
+# Sensitivity (or True Positive Rate) : percentage of 1's (actuals) correctly predicted by the model
+sensitivity(actual, predicted, threshold = 0.5)
+```
+```{r}
+# Specificity is the percentage of 0's (actuals) correctly predicted.
+specificity(actual,predicted, threshold = 0.5)
+```
+```{r}
+summary(SampleData)
+
+SampleDataCaret = SampleData[,c("CAND_SEX","CAND_CATEGORY","CAND_AGE","Education","Assets.In.crores","Liabilities.In.crores","Winner")]
+
+SampleDataCaret$Winner = as.factor(SampleDataCaret$Winner)
+
+summary(SampleDataCaret)
+```
+```{r}
+# ===============
+# Data Partition
+# ===============
+# Creating Training and Testing Dataset with 70:30 proportion
+
+set.seed(111)
+
+trainIndex = createDataPartition(SampleDataCaret$Winner, p = 0.7, list = FALSE, times = 1)
+
+train.data = SampleDataCaret[trainIndex,]
+test.data = SampleDataCaret[-trainIndex,]
+
+library(caret)
+library(rpart)
+library(rattle)
+library(rpart.plot)
+library(scales)# for percent
+
+# ==========================================
+# Model Building - CART (Unbalanced Dataset)
+# ==========================================
+
+# Setting the control parameter inputs for rpart
+r.ctrl <- rpart.control(minsplit = 100,
+                        minbucket = 10,
+                        cp = 0.0,
+                        xval = 10
+                        )
+
+# Build the model on Training Dataset
+cart.train = train.data
+
+model1 = rpart(Winner~.,data = cart.train, method = "class", control = r.ctrl)
+
+fancyRpartPlot(model1)
+```
+```{r}
+printcp(model1)
+```
+```{r}
+plotcp(model1)
+```
+```{r}
+# Prune Tree
+ptree = prune(model1, cp = 0.00411281, "CP")
+printcp(ptree)
+```
+```{r}
+fancyRpartPlot(ptree, main = "Pruned Final Tree")
+```
+```{r}
+# ==========================================
+# Performance Measures on Training Data Set
+# ==========================================
+
+# Predict Training Data Set
+cart.train$predict.class = predict(ptree, cart.train, type = "class")
+cart.train$predict.score = predict(ptree, cart.train, type = "prob")
+
+# Deciling
+decile <- function(x)
+  { 
+  deciles <- vector(length=10) 
+  for (i in seq(0.1,1,.1))
+    { 
+    deciles[i*10] <- quantile(x, i, na.rm=T)   
+    }   
+  return ( 
+    ifelse(x<deciles[1], 1, 
+           ifelse(x<deciles[2], 2, 
+                  ifelse(x<deciles[3], 3, 
+                         ifelse(x<deciles[4], 4, 
+                                ifelse(x<deciles[5], 5,
+                                       ifelse(x<deciles[6], 6,
+                                              ifelse(x<deciles[7], 7,
+                                                     ifelse(x<deciles[8], 8,
+                                                            ifelse(x<deciles[9], 9, 10
+                                                                   )))))))))) 
+  }
+
+cart.train$deciles = decile(cart.train$predict.score[,2]) # decile for personal.loan = 1
+
+# View(cart.train)
+
+# Ranking Code
+library(data.table)
+tmp_DT = data.table(cart.train)
+
+rank = tmp_DT[, list(cnt = length(Winner),
+                     cnt_resp = sum(Winner == 1),
+                     cnt_non_resp = sum(Winner == 0)
+                     ), by=deciles][order(-deciles)]
+
+rank$rrate = round(rank$cnt_resp/rank$cnt,4)
+rank$cum_resp = cumsum(rank$cnt_resp)
+rank$cum_non_resp = cumsum(rank$cnt_non_resp)
+rank$cum_rel_resp = round(rank$cum_resp/sum(rank$cnt_resp),4)
+rank$cum_rel_non_resp = round(rank$cum_non_resp / sum(rank$cnt_non_resp),4); 
+rank$ks = abs(rank$cum_rel_resp - rank$cum_rel_non_resp) * 100; 
+rank$rrate = percent(rank$rrate) 
+rank$cum_rel_resp = percent(rank$cum_rel_resp) 
+rank$cum_rel_non_resp = percent(rank$cum_rel_non_resp) 
+
+rank
+```
+```{r}
+library(ROCR) # KS and Area under Curve
+library(ineq) # KS and Area under Curve
+
+pred <- prediction(cart.train$predict.score[,2], cart.train$Winner) 
+
+perf <- performance(pred, "tpr", "fpr") 
+
+KS <- max(attr(perf, 'y.values')[[1]]-attr(perf, 'x.values')[[1]]) 
+
+auc <- performance(pred,"auc"); 
+auc <- as.numeric(auc@y.values) 
+
+gini = ineq(cart.train$predict.score[,2], type="Gini") 
+with(cart.train, table(Winner, predict.class))
+```
+```{r}
+KS
+```
+
+```{r}
+auc
+```
+```{r}
+gini
+```
+```{r}
+plot(perf) 
+
+plotROC(cart.train$Winner, cart.train$predict.score[,2])
+```
+```{r}
+# =====================
+# Predict Test Data Set
+# =====================
+
+cart.test = test.data
+
+cart.test$predict.class = predict(ptree, newdata = cart.test, type = "class")
+cart.test$predict.score = predict(ptree, newdata = cart.test, type = "prob")
+cart.test$deciles = decile(cart.test$predict.score[,2])
+
+#View(cart.test)
+
+# Ranking Code - Test Data
+tmp_DT = data.table(cart.test)
+
+rank = tmp_DT[, list(cnt = length(Winner),
+                     cnt_resp = sum(Winner == 1),
+                     cnt_non_resp = sum(Winner == 0)
+                     ), by=deciles][order(-deciles)]
+
+rank$rrate = round(rank$cnt_resp/rank$cnt,4)
+rank$cum_resp = cumsum(rank$cnt_resp)
+rank$cum_non_resp = cumsum(rank$cnt_non_resp)
+rank$cum_rel_resp = round(rank$cum_resp/sum(rank$cnt_resp),4)
+rank$cum_rel_non_resp = round(rank$cum_non_resp / sum(rank$cnt_non_resp),4); 
+rank$ks = abs(rank$cum_rel_resp - rank$cum_rel_non_resp) * 100; 
+rank$rrate = percent(rank$rrate) 
+rank$cum_rel_resp = percent(rank$cum_rel_resp) 
+rank$cum_rel_non_resp = percent(rank$cum_rel_non_resp) 
+
+rank
+```
+```{r}
+# KS and Area under Curve
+pred <- prediction(cart.test$predict.score[,2], cart.test$Winner) 
+
+perf <- performance(pred, "tpr", "fpr") 
+
+KS <- max(attr(perf, 'y.values')[[1]]-attr(perf, 'x.values')[[1]]) 
+
+auc <- performance(pred,"auc"); 
+auc <- as.numeric(auc@y.values) 
+
+gini = ineq(cart.test$predict.score[,2], type="Gini") 
+with(cart.test, table(Winner, predict.class))
+```
+```{r}
+KS
+```
+```{r}
+auc
+```
+```{r}
+gini
+```
+```{r}
+plot(perf) 
+
+plotROC(cart.test$Winner, cart.test$predict.score[,2])
+```
+```{r}
+path.rpart(ptree,c(3,7,13,27))
+```
+```{r}
+summary(train.data)
+
+SampleDataKNN = SampleData[,c("CAND_AGE","Assets.In.crores","Liabilities.In.crores","MALE","FEMALE","THIRD_GENDER",
+                              "CAT_GEN","CAT_SC","CAT_ST","DOCTORATE","POST_GRADUATE","GRADUATE",
+                              "GRADUATE_Prof","HIGHER_SECONDARY","SECONDARY","EIGTH_PASS","LITERATE","OTHERS",
+                              "ILLITERATE","NOT_GIVEN","Winner")]
+
+SampleDataKNN$Winner = as.factor(SampleDataKNN$Winner)
+
+# ===============
+# Data Partition
+# ===============
+# Creating Training and Testing Dataset with 70:30 proportion
+
+set.seed(111)
+
+pointer = sample(2,nrow(SampleDataKNN),replace = TRUE, prob = c(0.7,0.3))
+
+train.data = SampleDataKNN[pointer == 1,]
+test.data = SampleDataKNN[pointer == 2,]
+
+#trainIndexKnn = createDataPartition(SampleDataKNN$Winner, p = 0.7, list = FALSE, times = 1)
+
+#train.data = SampleDataKNN[trainIndexKnn,]
+#test.data = SampleDataKNN[-trainIndexKnn,]
+
+knn.model = knn(train = train.data[,-21], test = test.data[,-21], cl = train.data[,21], k = 19 )
+
+tab.knn = table(test.data[,21],knn.model)
+
+tab.knn
+```
+```{r}
+accuracy = (tab.knn[1,1]+tab.knn[2,2])/sum(tab.knn)
+accuracy
+```
+```{r}
+# Naive Bayes
+
+library(e1071)
+
+NB.model = naiveBayes(x = train.data[,-21], y = train.data[,21])
+
+NB.predicted = predict(NB.model, newdata = test.data[,-21])
+
+nb.tab = table(test.data[,21],NB.predicted)
+
+nb.tab
+```
+```{r}
+nb.accuracy = (nb.tab[1,1]+nb.tab[2,2])/sum(nb.tab)
+nb.accuracy
+```
+```{r}
+accuracy
+sensitivity
+specificity
+KS
+AUC-ROC
+```
+
