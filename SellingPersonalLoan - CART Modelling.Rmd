@@ -1,0 +1,401 @@
+---
+title: "Project Data Mining"
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+  word_document: default
+---
+
+```{r include = FALSE}
+# clear objects
+rm(list = ls())
+
+# Set working directory
+setwd("C:/Users/akishore/OneDrive - HCL Technologies Ltd/Abhishek Kishore Personal/Training/GreatLearning/WorkingDirectory")
+
+# Load required libraries
+library(caret)
+library(rpart)
+library(rattle)
+library(rpart.plot)
+library(randomForest)
+library(neuralnet)
+library(xlsx)
+library(corrplot)
+library(data.table) 
+library(scales) 
+library(ROCR) # KS and Area under Curve
+library(ineq) # KS and Area under Curve
+library(data.table) # used for reading and manipulation of data
+library(dplyr) # used for data manipulation and joining
+library(ggplot2) # used for ploting
+library(corrplot) # used for making correlation plot
+library(cowplot) # used for combining multiple plots
+```
+
+```{r include=FALSE}
+# Load Data
+FileDataset = read.xlsx("Bank_Personal_Loan_Modelling.xlsx", sheetName = "Bank_Personal_Loan_Modelling", header = T)
+```
+
+```{r}
+SampleDataset = FileDataset
+
+colnames(SampleDataset) =  c("ID", "Age", "Experience", "Income", "ZIPCode", "Family", "CCAvg", "Education", "Mortgage", "PersonalLoan", "SecuritiesAccount", "CDAccount", "Online", "CreditCard")
+
+attach(SampleDataset)
+```
+```{r}
+# ID not required
+#SampleDataset = SampleDataset[,-c(1)]
+
+# Converting Factor featurest to type factor
+SampleDataset$ZIPCode = as.factor(SampleDataset$ZIPCode)
+SampleDataset$Education = as.factor(SampleDataset$Education)
+
+SampleDataset$PersonalLoan = as.factor(SampleDataset$PersonalLoan)
+SampleDataset$SecuritiesAccount = as.factor(SampleDataset$SecuritiesAccount)
+SampleDataset$CDAccount = as.factor(SampleDataset$CDAccount)
+SampleDataset$Online = as.factor(SampleDataset$Online)
+SampleDataset$CreditCard = as.factor(SampleDataset$CreditCard)
+
+# Assigning Level Names for categorical features
+levels(SampleDataset$Education) = c("Undergrad", "Graduate", "Advanced")
+levels(SampleDataset$SecuritiesAccount) = c("No", "Yes")
+levels(SampleDataset$CDAccount) = c("No", "Yes")
+levels(SampleDataset$Online) = c("No", "Yes")
+levels(SampleDataset$CreditCard) = c("No", "Yes")
+levels(SampleDataset$PersonalLoan) = c("No", "Yes")
+
+SampleDataset = SampleDataset[,-1]
+
+str(SampleDataset)
+
+nearZeroVar(SampleDataset, saveMetrics = T) # Check for variance. If no variance than data wil give deterministic reslts
+```
+```{r}
+# Check of missing values
+colSums(is.na(SampleDataset))
+```
+```{r}
+# NA treatment
+SampleDataset$Family[which(is.na(SampleDataset$Family))] = round(mean(SampleDataset$Family, na.rm = T))
+
+summary(SampleDataset)
+```
+```{r}
+# Change -ve experince to median value of Experience
+SampleDataset$Experience[which(SampleDataset$Experience<0)] = round(mean(Experience[which(SampleDataset$Experience > 0 | SampleDataset$Experience == 0)]),0)
+
+# Univariate Analysis
+P1 = ggplot(SampleDataset, aes(x = Age), bandwidth = 0.5) + geom_histogram()
+P2 = ggplot(SampleDataset, aes(x = Experience), bandwidth = 0.5) + geom_histogram()
+P3 = ggplot(SampleDataset, aes(x = Income), bandwidth = 0.5) + geom_histogram()
+P4 = ggplot(SampleDataset, aes(x = Family), bandwidth = 0.5) + geom_histogram()
+P5 = ggplot(SampleDataset, aes(x = CCAvg), bandwidth = 0.5) + geom_histogram()
+P6 = ggplot(SampleDataset, aes(x = Mortgage), bandwidth = 0.5) + geom_histogram()
+
+plot_grid(P1,P2,P3,P4,P5,P6, nrow = 3, ncol = 2)
+```
+```{r}
+P7 = ggplot(SampleDataset, aes(x = Education), bandwidth = 0.5) + geom_bar() 
+P8 = ggplot(SampleDataset, aes(x = SecuritiesAccount), bandwidth = 0.5) + geom_bar()
+P9 = ggplot(SampleDataset, aes(x = CDAccount), bandwidth = 0.5) + geom_bar()
+P10 = ggplot(SampleDataset, aes(x = Online), bandwidth = 0.5) + geom_bar()
+P11 = ggplot(SampleDataset, aes(x = CreditCard), bandwidth = 0.5) + geom_bar()
+
+plot_grid(P7, P8, P9, P10, P11, nrow = 3, ncol = 2)
+```
+```{r}
+# Bivariate Analysis
+
+boxplot(Age~PersonalLoan, col = c("red","blue"), horizontal = T, xlab = "Age", ylab = "Personal Loan" )
+boxplot(Experience~PersonalLoan, col = c("red","blue"), horizontal = T, xlab = "Experience", ylab = "Personal Loan")
+boxplot(Income~PersonalLoan, col = c("red","blue"), horizontal = T, xlab = "Income", ylab = "Personal Loan")
+boxplot(Family~PersonalLoan, col = c("red","blue"), horizontal = T, xlab = "Family", ylab = "Personal Loan")
+boxplot(CCAvg~PersonalLoan, col = c("red","blue"), horizontal = T, xlab = "Credit Card Avg", ylab = "Personal Loan")
+boxplot(Mortgage~PersonalLoan, col = c("red","blue"), horizontal = T, xlab = "Mortgage", ylab = "Personal Loan")
+```
+```{r}
+P12 = ggplot(SampleDataset, aes(x = PersonalLoan, fill = Education), bandwidth = 0.5) + geom_bar(position = "dodge") 
+P13 = ggplot(SampleDataset, aes(x = PersonalLoan, fill = SecuritiesAccount), bandwidth = 0.5) + geom_bar(position = "dodge")
+P14 = ggplot(SampleDataset, aes(x = PersonalLoan, fill = CDAccount), bandwidth = 0.5) + geom_bar(position = "dodge")
+P15 = ggplot(SampleDataset, aes(x = PersonalLoan, fill = Online), bandwidth = 0.5) + geom_bar(position = "dodge")
+P16 = ggplot(SampleDataset, aes(x = PersonalLoan, fill = CreditCard), bandwidth = 0.5) + geom_bar(position = "dodge")
+
+plot_grid(P12, P13, P14, P15, P16, nrow = 3, ncol = 2)
+```
+```{r}
+# Hypothesis testing
+chisq.test(table(PersonalLoan,SecuritiesAccount))
+```
+```{r}
+# Hypothesis testing
+chisq.test(table(PersonalLoan,CDAccount))
+```
+```{r}
+# Hypothesis testing
+chisq.test(table(PersonalLoan,Online))
+```
+```{r}
+# Hypothesis testing
+chisq.test(table(PersonalLoan,CreditCard))
+```
+```{r}
+# Hypothesis testing
+chisq.test(table(PersonalLoan,Education))
+```
+```{r}
+# Hypothesis testing
+chisq.test(table(PersonalLoan,ZIPCode))
+```
+```{r}
+# Hypothesis testing
+summary(glm(PersonalLoan~Age+Experience+Income+Family+CCAvg+Mortgage, family = binomial, data = SampleDataset))
+
+```
+```{r}
+# Feature Engineering
+library(zipcode)
+data(zipcode)
+str(zipcode)
+
+data_zip = zipcode[, c("zip", "city", "state")]
+
+SampleDataset = merge(SampleDataset, data_zip, by.x = "ZIPCode", by.y = "zip", all.x = T)
+
+# Converting Factor featurest to type factor
+SampleDataset$city = as.factor(SampleDataset$city)
+SampleDataset$state = as.factor(SampleDataset$state)
+
+#attach(SampleDataset)
+
+names(SampleDataset)
+
+summary(SampleDataset)
+
+# Find NAs in dataset with new features
+colSums(is.na(SampleDataset))
+
+# NA treatement for city and state data
+SampleDataset$city[which(is.na(SampleDataset$city))] =  as.factor(names(table(SampleDataset$city)[which.max(table(SampleDataset$city))]))
+
+SampleDataset$state[which(is.na(SampleDataset$state))] = as.factor(names(table(SampleDataset$state)[which.max(table(SampleDataset$state))]))
+
+# Removing columns not need analysis, like ID, ZIPCode
+SampleDataset = SampleDataset[,-4]
+
+
+```
+
+```{r}
+# ===============
+# Data Partition
+# ===============
+# Creating Training and Testing Dataset with 70:30 proportion
+
+set.seed(111)
+
+trainIndex = createDataPartition(SampleDataset$PersonalLoan, p = 0.7, list = FALSE, times = 1)
+
+train.data = SampleDataset[trainIndex,]
+test.data = SampleDataset[-trainIndex,]
+
+dim(train.data)
+```
+```{r}
+dim(test.data)
+```
+```{r}
+# Responders in train dataset
+table(train.data$PersonalLoan)
+```
+```{r}
+# Responders in test dataset
+table(test.data$PersonalLoan)
+```
+```{r}
+# ==========================================
+# Model Building - CART (Unbalanced Dataset)
+# ==========================================
+
+# Setting the control parameter inputs for rpart
+r.ctrl <- rpart.control(minsplit = 100,
+                        minbucket = 10,
+                        cp = 0.0,
+                        xval = 10
+                        )
+
+# Build the model on Training Dataset
+cart.train = train.data
+model1 = rpart(PersonalLoan~.,data = cart.train, method = "class", control = r.ctrl)
+
+summary(model1)
+
+fancyRpartPlot(model1)
+```
+```{r}
+printcp(model1)
+```
+```{r}
+plotcp(model1)
+```
+```{r}
+ptree = prune(model1, cp = 0.000000, "CP")
+printcp(ptree)
+```
+
+```{r}
+fancyRpartPlot(ptree, main = "Pruned Final Tree")
+```
+
+```{r}
+# ==========================================
+# Performance Measures on Training Data Set
+# ==========================================
+
+# Predict Training Data Set
+cart.train$predict.class = predict(ptree, cart.train, type = "class")
+cart.train$predict.score = predict(ptree, cart.train, type = "prob")
+
+# Deciling
+decile <- function(x)
+  { 
+  deciles <- vector(length=10) 
+  for (i in seq(0.1,1,.1))
+    { 
+    deciles[i*10] <- quantile(x, i, na.rm=T)   
+    }   
+  return ( 
+    ifelse(x<deciles[1], 1, 
+           ifelse(x<deciles[2], 2, 
+                  ifelse(x<deciles[3], 3, 
+                         ifelse(x<deciles[4], 4, 
+                                ifelse(x<deciles[5], 5,
+                                       ifelse(x<deciles[6], 6,
+                                              ifelse(x<deciles[7], 7,
+                                                     ifelse(x<deciles[8], 8,
+                                                            ifelse(x<deciles[9], 9, 10
+                                                                   )))))))))) 
+  }
+
+cart.train$deciles = decile(cart.train$predict.score[,2]) # decile for personal.loan = 1
+
+# View(cart.train)
+
+# Ranking Code
+tmp_DT = data.table(cart.train)
+
+rank = tmp_DT[, list(cnt = length(PersonalLoan),
+                     cnt_resp = sum(PersonalLoan == 1),
+                     cnt_non_resp = sum(PersonalLoan == 0)
+                     ), by=deciles][order(-deciles)]
+
+rank$rrate = round(rank$cnt_resp/rank$cnt,4)
+rank$cum_resp = cumsum(rank$cnt_resp)
+rank$cum_non_resp = cumsum(rank$cnt_non_resp)
+rank$cum_rel_resp = round(rank$cum_resp/sum(rank$cnt_resp),4)
+rank$cum_rel_non_resp = round(rank$cum_non_resp / sum(rank$cnt_non_resp),4); 
+rank$ks = abs(rank$cum_rel_resp - rank$cum_rel_non_resp) * 100; 
+rank$rrate = percent(rank$rrate) 
+rank$cum_rel_resp = percent(rank$cum_rel_resp) 
+rank$cum_rel_non_resp = percent(rank$cum_rel_non_resp) 
+
+rank
+```
+```{r}
+pred <- prediction(cart.train$predict.score[,2], cart.train$PersonalLoan) 
+
+perf <- performance(pred, "tpr", "fpr") 
+
+KS <- max(attr(perf, 'y.values')[[1]]-attr(perf, 'x.values')[[1]]) 
+
+auc <- performance(pred,"auc"); 
+auc <- as.numeric(auc@y.values) 
+
+gini = ineq(cart.train$predict.score[,2], type="Gini") 
+with(cart.train, table(PersonalLoan, predict.class)) 
+```
+```{r}
+(3148 + 298)/3500 * 100
+```
+```{r}
+KS
+```
+```{r}
+auc
+```
+```{r}
+gini
+```
+```{r}
+plot(perf) 
+```
+```{r}
+# =====================
+# Predict Test Data Set
+# =====================
+
+cart.test = test.data
+
+cart.test$predict.class = predict(ptree, newdata = cart.test, type = "class")
+cart.test$predict.score = predict(ptree, newdata = cart.test, type = "prob")
+cart.test$deciles = decile(cart.test$predict.score[,2])
+
+#View(cart.test)
+
+# Ranking Code - Test Data
+tmp_DT = data.table(cart.test)
+
+rank = tmp_DT[, list(cnt = length(PersonalLoan),
+                     cnt_resp = sum(PersonalLoan == 1),
+                     cnt_non_resp = sum(PersonalLoan == 0)
+                     ), by=deciles][order(-deciles)]
+
+rank$rrate = round(rank$cnt_resp/rank$cnt,4)
+rank$cum_resp = cumsum(rank$cnt_resp)
+rank$cum_non_resp = cumsum(rank$cnt_non_resp)
+rank$cum_rel_resp = round(rank$cum_resp/sum(rank$cnt_resp),4)
+rank$cum_rel_non_resp = round(rank$cum_non_resp / sum(rank$cnt_non_resp),4); 
+rank$ks = abs(rank$cum_rel_resp - rank$cum_rel_non_resp) * 100; 
+rank$rrate = percent(rank$rrate) 
+rank$cum_rel_resp = percent(rank$cum_rel_resp) 
+rank$cum_rel_non_resp = percent(rank$cum_rel_non_resp) 
+
+rank
+```
+```{r}
+# KS and Area under Curve
+pred <- prediction(cart.test$predict.score[,2], cart.test$PersonalLoan) 
+
+perf <- performance(pred, "tpr", "fpr") 
+
+KS <- max(attr(perf, 'y.values')[[1]]-attr(perf, 'x.values')[[1]]) 
+
+auc <- performance(pred,"auc"); 
+auc <- as.numeric(auc@y.values) 
+
+gini = ineq(cart.test$predict.score[,2], type="Gini") 
+with(cart.test, table(PersonalLoan, predict.class)) 
+```
+```{r}
+(1349 + 118)/1500 * 100
+```
+```{r}
+KS
+```
+```{r}
+auc
+```
+```{r}
+gini
+```
+```{r}
+plot(perf) 
+```
+```{r}
+path.rpart(ptree,c(7,13,11))
+```
+
