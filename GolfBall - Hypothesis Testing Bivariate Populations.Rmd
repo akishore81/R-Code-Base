@@ -6,7 +6,7 @@ output: html_notebook
 ```{r}
 rm(list = ls())
 
-setwd("C:/Users/akishore/OneDrive - HCL Technologies Ltd/Abhishek Kishore Personal/Training/GreatLearning/Statistical Methods for Decision Making/Week 4")
+setwd("//Statistical Methods for Decision Making")
 
 library(xlsx)
 golf = read.xlsx("golf.xls",sheetName = "Data")
