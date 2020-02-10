@@ -1,0 +1,433 @@
+---
+title: "Mode of Transport"
+author: "Abhishek Kishore"
+date: "20 August 2019"
+output:
+  word_document: default
+  html_document: default
+---
+
+### OBJECTIVE
+The objective of the project is to predict whether or not an employee will use Car as a mode of transport. Also, which variables are a significant predictor behind this decision..
+
+```{r echo=FALSE}
+rm(list = ls())
+
+setwd("C:/Users/akishore/OneDrive - HCL Technologies Ltd/Abhishek Kishore Personal/Training/GreatLearning/7 Machine Learning/Project")
+```
+
+## Load Data
+
+```{r}
+cars = read.csv("Cars.csv")
+str(cars)
+```
+```{r}
+summary(cars)
+```
+
+* **Observations:**
+  + 418 observations with nine features availabel in dataset.
+  + One observation with MBA as NA noticed.
+  + Features like MBA, Engineering, License should be converted to factors.
+  + As objective is to find factors influencing the usage of car, we need to perform dummy encoding for Transport feature.
+
+# Feature Transformation
+
+```{r}
+# NA treatment
+
+cars = na.omit(cars)
+
+# Factor transformation
+cars$Engineer = as.factor(cars$Engineer)
+cars$MBA = as.factor(cars$MBA)
+cars$license = as.factor(cars$license)
+
+# Dummy encoding
+cars$Transport.Car = as.factor(ifelse(cars$Transport == "Car", 1,0))
+
+
+prop.table(table(cars$Transport.Car))*100
+```
+
+* **Observations:** *
+  + The number of people using cars are in minority (8.39%). Hence we shall perform SMOTE to achieve balanced data.
+
+## Exploratory Data Analysis
+
+```{r}
+library(ggplot2) 
+
+ggplot(cars, aes(y = Age)) + geom_boxplot() + coord_flip()
+```
+
+```{r}
+ggplot(cars, aes(y = Work.Exp)) + geom_boxplot() + coord_flip()
+```
+```{r}
+ggplot(cars, aes(y = Salary)) + geom_boxplot() + coord_flip()
+```
+```{r}
+ggplot(cars, aes(y = Distance)) + geom_boxplot() + coord_flip()
+```
+```{r}
+ggplot(cars, aes(x = Age)) + geom_histogram()
+```
+
+```{r}
+ggplot(cars, aes(x = Work.Exp)) + geom_histogram()
+```
+
+```{r}
+ggplot(cars, aes(x = Salary)) + geom_histogram()
+```
+
+```{r}
+ggplot(cars, aes(x = Distance)) + geom_histogram()
+```
+
+* **Observations:** 
+  + It can be observered that outliers exists for features like Age, Work.Exp, Distance and Salary.
+  + Left skewed data can be noticed for Salary and Work Experience.
+
+## Spliting Data to Train and Test
+
+```{r}
+# Creating Training and Testing Dataset with 70:30 proportion
+
+library(caret)
+
+set.seed(111)
+
+trainIndex = createDataPartition(cars$Transport.Car, p = 0.7, list = FALSE, times = 1)
+
+Car.Train = cars[trainIndex,]
+Car.Test = cars[-trainIndex,]
+
+Car.Train = Car.Train[,c(1:8,10)]
+Car.Test = Car.Test[,c(1:8,10)]
+
+prop.table(table(Car.Train$Transport.Car))
+```
+```{r}
+prop.table(table(Car.Test$Transport.Car))
+```
+```{r}
+# Balancing Data with SMOTE
+library(DMwR)
+
+balanced.car = SMOTE(Transport.Car ~.,Car.Train, perc.over = 5000, perc.under = 150)
+
+prop.table(table(balanced.car$Transport.Car))
+```
+
+* **Observation:** 
+  + Now we have 59.52% of employee not usig cars, reduced from 91.9%.
+  + Employees using car as increased from 8% to 40.48%
+
+## Logistic Regression Modelling
+
+```{r}
+car_glm = glm(Transport.Car~., data = balanced.car, family = binomial(link = "logit"))
+
+summary(car_glm)
+```
+
+* **Observations:** 
+  + Age, Male, Engineer, Work.Exp, Salary and Distance are major factors incfluencing the decision to travel by car.
+  + License also affects the decision to travel by car, but the affect is lesser as compared to other factors.
+
+```{r}
+Car.Test$Log.Pred = predict(car_glm, newdata = Car.Test, type = "response")
+
+table(Car.Test$Transport.Car, Car.Test$Log.Pred>0.5)
+```
+
+* **Observations:** 
+  + The accuracy is 96.77%.
+  + The sensitivity is 90%.
+  + The specificity is 97.3%.
+
+```{r}
+varImp(car_glm)
+```
+
+## KNN Modelling
+
+```{r}
+library(caret)
+
+KNN.Train = balanced.car
+KNN.Test = Car.Test[,-c(10)]
+
+# Preprocessing
+trainX = KNN.Train[,names(KNN.Train) != "Transport.Car"]
+preProcValues <- preProcess(x = trainX,method = c("center", "scale"))
+preProcValues
+
+set.seed(111)
+
+ctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+knn_Fit <- train(Transport.Car ~ ., 
+                 data = KNN.Train, 
+                 method = "knn", 
+                 trControl = ctrl, 
+                 preProcess = c("center","scale"), 
+                 tuneLength = 15)
+knn_Fit
+```
+```{r}
+plot(knn_Fit)
+```
+```{r}
+KNN_Prediction <- predict(knn_Fit, newdata = KNN.Test)
+
+#confusionMatrix(KNN_Prediction, KNN.Test$Transport.Car)
+
+table(KNN_Prediction, KNN.Test$Transport.Car)
+```
+
+* **Observations:** 
+  + The accuracy is 98.38%.
+  + The sensitivity is 83.33%.
+  + The specificity is 100%.
+
+## Naive Bayes Modelling
+
+```{r}
+# Naive Bayes is based on the idea that the predictor variables are independent of each other.
+
+library(corrplot)
+
+nb_cars = cars
+
+nb_cars$Male = ifelse(nb_cars$Gender == "Male",1,0)
+
+nb_cars = nb_cars[,c(1,3:8,10,11)]
+
+nb_cars$Engineer = as.numeric(nb_cars$Engineer)-1
+nb_cars$MBA = as.numeric(nb_cars$MBA)-1
+nb_cars$license = as.numeric(nb_cars$license)-1
+nb_cars$Transport.Car = as.numeric(nb_cars$Transport.Car)-1
+
+str(nb_cars)
+
+corrplot(cor(nb_cars))
+```
+
+* **Observation:** 
+  + There is high collinearity between Age, Work.Exp and Salary.
+  + Naive Base may not be applicable as predictor variables are not dependent.
+  + Principal Component Analysis (PCA) shall be performed to remove multicollinearity
+  
+
+## CART Modelling
+
+```{r}
+library(caret)
+library(rpart)
+library(rattle)
+library(rpart.plot)
+library(scales)# for percent
+
+Caret.Train = balanced.car
+Caret.Test = Car.Test
+
+# Setting the control parameter inputs for rpart
+r.ctrl <- rpart.control(minsplit = 15,
+                        minbucket = 5,
+                        cp = 0.0,
+                        xval = 10
+                        )
+
+model1 = rpart(Transport.Car~.,data = balanced.car, method = "class", control = r.ctrl)
+
+fancyRpartPlot(model1)
+```
+```{r}
+printcp(model1)
+```
+```{r}
+plotcp(model1)
+```
+```{r}
+Caret.Test$predict.class = predict(model1, newdata = Caret.Test, type = "class")
+Caret.Test$predict.score = predict(model1, newdata = Caret.Test, type = "prob")
+
+# Deciling
+decile <- function(x)
+  { 
+  deciles <- vector(length=10) 
+  for (i in seq(0.1,1,.1))
+    { 
+    deciles[i*10] <- quantile(x, i, na.rm=T)   
+    }   
+  return ( 
+    ifelse(x<deciles[1], 1, 
+           ifelse(x<deciles[2], 2, 
+                  ifelse(x<deciles[3], 3, 
+                         ifelse(x<deciles[4], 4, 
+                                ifelse(x<deciles[5], 5,
+                                       ifelse(x<deciles[6], 6,
+                                              ifelse(x<deciles[7], 7,
+                                                     ifelse(x<deciles[8], 8,
+                                                            ifelse(x<deciles[9], 9, 10
+                                                                   )))))))))) 
+  }
+
+Caret.Test$deciles = decile(Caret.Test$predict.score[,2])
+
+library(data.table)
+
+# Ranking Code - Test Data
+tmp_DT = data.table(Caret.Test)
+
+rank = tmp_DT[, list(cnt = length(Transport.Car),
+                     cnt_resp = sum(Transport.Car == 1),
+                     cnt_non_resp = sum(Transport.Car == 0)
+                     ), by=deciles][order(-deciles)]
+
+rank$rrate = round(rank$cnt_resp/rank$cnt,4)
+rank$cum_resp = cumsum(rank$cnt_resp)
+rank$cum_non_resp = cumsum(rank$cnt_non_resp)
+rank$cum_rel_resp = round(rank$cum_resp/sum(rank$cnt_resp),4)
+rank$cum_rel_non_resp = round(rank$cum_non_resp / sum(rank$cnt_non_resp),4); 
+rank$ks = abs(rank$cum_rel_resp - rank$cum_rel_non_resp) * 100; 
+rank$rrate = percent(rank$rrate) 
+rank$cum_rel_resp = percent(rank$cum_rel_resp) 
+rank$cum_rel_non_resp = percent(rank$cum_rel_non_resp) 
+
+rank
+
+with(Caret.Test, table(Transport.Car, predict.class))
+```
+
+* **Observations:** 
+  + The accuracy is 99.2%.
+  + The sensitivity is 100%.
+  + The specificity is 99.12%.
+  + Important featutes are Age, Distance, Salary and Work.Exp.
+  + An employee is most likely to take a car if:
+    + Work Experience is > 9.5, Distance Travelled is > 13 and Salary >17K
+    + Work Experience is > 9.5, Distance Travelled is > 13 and Salary <17K but Age > 33.
+
+## BAGGING Modelling
+
+```{r}
+library(ipred)
+
+gb.Car.TRain = Car.Train
+gb.Car.Test = Car.Test[,c(-10,-11)]
+
+gb.Car.TRain$Male = ifelse(gb.Car.TRain$Gender == "Male", 1, 0)
+gb.Car.Test$Male = ifelse(gb.Car.Test$Gender == "Male", 1, 0)
+
+gb.Car.TRain = gb.Car.TRain[,c(1,3:10)]
+gb.Car.Test = gb.Car.Test[,c(1,3:10)]
+
+str(gb.Car.TRain)
+
+gb.Car.TRain$Male = as.factor(gb.Car.TRain$Male)
+gb.Car.Test$Male = as.factor(gb.Car.Test$Male)
+
+#gb.Car.TRain$Engineer = as.numeric(gb.Car.TRain$Engineer)
+#gb.Car.TRain$MBA = as.numeric(gb.Car.TRain$MBA)
+#gb.Car.TRain$license = as.numeric(gb.Car.TRain$license)
+#gb.Car.TRain$Transport.Car = as.numeric(gb.Car.TRain$Transport.Car)
+
+#gb.Car.Test$Engineer = as.numeric(gb.Car.Test$Engineer)
+#gb.Car.Test$MBA = as.numeric(gb.Car.Test$MBA)
+#gb.Car.Test$license = as.numeric(gb.Car.Test$license)
+#gb.Car.Test$Transport.Car = as.numeric(gb.Car.Test$Transport.Car)
+
+r.ctrl <- rpart.control(minsplit = 15,
+                        maxdepth = 5
+                        )
+
+car.bagging = bagging(Transport.Car~.,
+                      data = gb.Car.TRain,
+                      control = r.ctrl)
+
+gb.Car.Test$pred.class = predict(car.bagging, gb.Car.Test)
+
+table(gb.Car.Test$Transport.Car, gb.Car.Test$pred.class)
+
+#confusionMatrix(gb.Car.Test$pred.class, gb.Car.Test$Transport.Car)
+```
+
+* **Observations:** 
+  + The accuracy is 99.2%.
+  + The sensitivity is 100%.
+  + The specificity is 99.12%.
+
+## XGBOOST Modeling
+
+```{r}
+
+library(xgboost)
+
+# XGBoost works with matices that contain only numberic data
+
+xgb.Car.TRain = Car.Train
+xgb.Car.Test = Car.Test[,c(-10,-11)]
+
+xgb.Car.TRain$Male = ifelse(xgb.Car.TRain$Gender == "Male", 1, 0)
+xgb.Car.Test$Male = ifelse(xgb.Car.Test$Gender == "Male", 1, 0)
+
+str(xgb.Car.TRain)
+
+xgb.Car.TRain = xgb.Car.TRain[,c(1,3:10)]
+xgb.Car.Test = xgb.Car.Test[,c(1,3:10)]
+
+xgb.Car.TRain$Engineer = as.numeric(xgb.Car.TRain$Engineer) - 1
+xgb.Car.TRain$MBA = as.numeric(xgb.Car.TRain$MBA) - 1
+xgb.Car.TRain$license = as.numeric(xgb.Car.TRain$license) - 1
+xgb.Car.TRain$Transport.Car = as.numeric(xgb.Car.TRain$Transport.Car) - 1
+
+xgb.Car.Test$Engineer = as.numeric(xgb.Car.Test$Engineer) - 1 
+xgb.Car.Test$MBA = as.numeric(xgb.Car.Test$MBA) - 1
+xgb.Car.Test$license = as.numeric(xgb.Car.Test$license) - 1 
+xgb.Car.Test$Transport.Car = as.numeric(xgb.Car.Test$Transport.Car) - 1
+
+xgb.Car.Train_feature = as.matrix(xgb.Car.TRain[,c(1:7,9)])
+xgb.Car.Train_label = as.matrix(xgb.Car.TRain[,8])
+
+xgb.Car.test_feature = as.matrix(xgb.Car.Test[,c(1:7,9)])
+
+xgb_fit = xgboost(data = xgb.Car.Train_feature,
+                  label = xgb.Car.Train_label,
+                  eta = 0.1,
+                  max_depth = 5,
+                  min_child_weight = 3,
+                  nrounds = 10000,
+                  nfolds = 5,
+                  objective = "binary:logistic", # for regression models
+                  verbose = 0, # Silent
+                  early_stoping_rounds = 10 # stop if no improvement for 10 consequtive tress
+                  )
+
+xgb.Car.Test$pred.class = predict(xgb_fit, newdata = xgb.Car.test_feature)
+
+table(xgb.Car.Test$Transport.Car, xgb.Car.Test$pred.class >= 0.5)
+
+#confusionMatrix(xgb.Car.Test$pred.class, xgb.Car.Test$Transport.Car)
+```
+
+* **Observations:** 
+  + The accuracy is 99.2%.
+  + The sensitivity is 100%.
+  + The specificity is 99.12%.
+  
+## Conclusion
+  + Important featutes that influence the usage of a CAR are 
+    + Age
+    + Distance
+    + Salary and
+    + Work.Exp.
+  + An employee is most likely to take a car if:
+    + Work Experience is > 9.5, Distance Travelled is > 13 and Salary >17K
+    + Work Experience is > 9.5, Distance Travelled is > 13 and Salary <17K but Age > 33.
+  + CART, BAGGING and XGBOOST models have the same performance and hence anyone of them can be taken to make required predictions. 
+
