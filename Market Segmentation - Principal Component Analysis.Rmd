@@ -1,0 +1,123 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+setwd("C:/Users/akishore/OneDrive - HCL Technologies Ltd/Abhishek Kishore Personal/Training/GreatLearning/WorkingDirectory")
+
+FactoHair = read.csv("Factor-Hair-Revised.csv", header = T)
+
+summary(FactoHair)
+
+str(FactoHair)
+
+```
+```{r}
+FactoHair = na.omit(FactoHair)
+
+mydata = FactoHair[,2:12]
+
+attach(mydata)
+
+cor(mydata)
+```
+```{r}
+library(corrplot)
+
+#cor.plot(cor(mydata))
+corrplot(cor(mydata))
+
+```
+```{r}
+library(corrgram)
+
+corrgram(cor(mydata))
+```
+```{r}
+library(nFactors)
+
+#Barlett Sphericity Test for checking the possibility of data dimention reduction
+cortest.bartlett(cor(mydata),nrow(mydata))
+
+#p-value less than 0.05 and hence null hypothesis of all variances to be same is rejected.
+```
+```{r}
+#library(nFactors)
+
+#Finding Eigen values
+ev = eigen(cor(mydata))
+EigenValues = ev$values
+EigenVectors = ev$vectors
+
+#Draw scree plot
+Factors = c(1,2,3,4,5,6,7,8,9,10,11)
+scree = data.frame(Factors,EigenValues)
+plot(scree, main = "EigenValues V/s Factors", col = "blue")
+lines(scree)
+
+#Considering Kizen rule only factors with Eigen Value >1 should be selected. Hence only four facors are requirued.
+```
+```{r}
+#Perform Factor Analysis
+library(psych)
+
+unrotatedvalue = principal(mydata, nfactors = 4, rotate = "none")
+unrotatedvalue
+```
+```{r}
+rotatedvalue = principal(mydata,nfactors = 4, rotate = "varimax")
+rotatedvalue
+```
+```{r}
+plot(rotatedvalue, row.names(rotatedvalue$loadings))
+```
+```{r}
+rotatedvalue$scores
+```
+```{r}
+Factored.DataSet = data.frame(FactoHair[,12],rotatedvalue$scores)
+colnames(Factored.DataSet)[1] = "Satisfaction"
+Factored.DataSet
+```
+```{r}
+pcaset = prcomp(mydata, center = T, scale. = T)
+pcaset$x
+
+cor(Factored.DataSet)[,1]
+```
+```{r}
+model1 = lm(Factored.DataSet$Satisfaction~., data = Factored.DataSet)
+summary(model1)
+```
+```{r}
+model2 = lm(Factored.DataSet$Satisfaction~RC1+RC2, data = Factored.DataSet)
+summary(model2)
+```
+```{r}
+anova(model2)
+```
+```{r}
+confint(model2)
+```
+```{r}
+actual = Factored.DataSet$Satisfaction
+predicted = predict(model2)
+
+plot(actual, col = "red")
+lines(actual, col = "red")
+##plot(predicted, col = "blue")
+lines(predicted, col = "blue")
+```
+
+
+```{r}
+pca.dataset = data.frame(FactoHair[,12],pcaset$x)
+colnames(pca.dataset)[1] = "Satisfaction"
+pca.dataset
+```
+```{r}
+model3 = lm(pca.dataset$Satisfaction~., data = pca.dataset)
+summary(model3)
+```
+
