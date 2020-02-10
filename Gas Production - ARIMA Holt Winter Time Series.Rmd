@@ -29,7 +29,7 @@ rm(list = ls())
 ```
 
 
-## Loading data
+## Loading data 
 
 ```{r gas}
 library(forecast)
