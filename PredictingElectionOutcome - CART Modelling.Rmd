@@ -13,7 +13,7 @@ output:
 rm(list = ls())
 
 # Set working directory
-setwd("C:/Users/akishore/OneDrive - HCL Technologies Ltd/Abhishek Kishore Personal/Training/GreatLearning/WorkingDirectory")
+setwd("//WorkingDirectory")
 
 # Load required libraries
 library(caret)
