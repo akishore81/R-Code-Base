@@ -8,7 +8,7 @@ output: html_notebook
 rm(list = ls())
 
 # Set working directory
-setwd("C:/Users/akishore/OneDrive - HCL Technologies Ltd/Abhishek Kishore Personal/Training/GreatLearning/5 Predictive Modeling/Project")
+setwd("//WorkingDirectory")
 
 # Load required libraries
 library(xlsx)
