@@ -1,6 +1,5 @@
-# hello-world
-Test Repository
+# R Code Repository
 
 Hello!!!
 
-Try to learn how to use Githun to make personal repository of codes.
+This is my personal code base for R codes.
