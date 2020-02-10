@@ -1,0 +1,104 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+rm(list = ls())
+
+setwd("C:/Users/akishore/OneDrive - HCL Technologies Ltd/Abhishek Kishore Personal/Training/GreatLearning/Statistical Methods for Decision Making/Week 4")
+
+library(xlsx)
+golf = read.xlsx("golf.xls",sheetName = "Data")
+golf
+attach(golf)
+```
+```{r}
+# General descriptive statistics
+summary(golf)
+```
+```{r}
+boxplot(Current, horizontal = TRUE, xlab = "Box plot for Current", col = "blue")
+```
+```{r}
+boxplot(New,horizontal = TRUE, xlab = "Box plot for New", col = "green")
+```
+```{r}
+hist(Current, xlab = "Histogram for Current", col = "blue")
+```
+```{r}
+hist(New,xlab = "Histogram for New", col = "green")
+```
+```{r}
+# Hypothesis testing: This is a two sample t-test
+# It's a two tailed test of hypothesis
+# Ho; mu1 - mu2 = 0 or mu1 = mu2
+# Ha; mu1 - mu2 != 0 or mu1 != mu2
+t.test(Current,New,paired = FALSE, var.equal = TRUE)
+
+#p-value = 0.1879 > 0.05, hence we fail to reject null hypothesis
+#The 95% confidence interval of the difference in mean gas mileage is between [-1.383958 ,6.933958]
+```
+```{r}
+# 95% confidence interval for the population mean of Current
+# CI  = mean +- error
+# error = t * se
+n = length(Current)
+error = qt(0.975, df = n-1) * sd(Current)/sqrt(n)
+lower.bound = mean(Current, na.rm = TRUE) - error
+upper.bound = mean(Current, na.rm = TRUE)  + error
+
+lower.bound
+upper.bound
+```
+```{r}
+# 95% confidence interval for the population mean of New
+# 95% confidence level means we have 5% of rejection region, i.e 2.5% on each side of mean.
+# So, the interval where 95% of values fall will be 95-2.5% = 97.5% = 0.975
+# CI  = mean +- error
+# error = t * se
+n = length(New)
+error = qt(0.975, df = n-1) * sd(New)/sqrt(n)
+lower.bound = mean(New, na.rm = TRUE) - error
+upper.bound = mean(New, na.rm = TRUE)  + error
+
+lower.bound
+upper.bound
+```
+
+```{r}
+str(golf)
+```
+```{r}
+sd(Current)
+sd(New)
+sd(New) - sd(Current)
+var(Current)
+var(New)
+
+round(abs(qnorm((1-0.90)/2))*(5/sqrt(10)),2)
+```
+```{r}
+n = (sd(Current)^2/length(Current) + sd(New)^2/length(New))^2
+d = (sd(Current)^2/length(Current))^2*(1/(length(Current)-1)) + (sd(New)^2/length(New))^2*(1/(length(New)-1))
+df = n/d
+
+mean(Current)-mean(New) + qt(0.975,df)*sqrt(sd(Current)^2/length(Current) + sd(New)^2/length(New))
+mean(Current)-mean(New) - qt(0.975,df)*sqrt(sd(Current)^2/length(Current) + sd(New)^2/length(New))
+```
+```{r}
+mean(Current) - mean(New)
+mean(Current-New)
+
+std.dev = sqrt((sd(Current)^2+sd(New)^2)/2)
+
+power.t.test(n=40,delta = mean(Current-New),sd = std.dev, sig.level = 0.05, type = "two.sample", alternative = "two.sided")
+
+# below indicates that power of our test to reject null hypothesis is only 25%
+```
+```{r}
+power.t.test(power = 0.95, delta = mean(Current-New),sd = std.dev, sig.level = 0.05, type = "two.sample", alternative = "two.sided")
+
+#below indicates that to achive power of test as 95%, to reject the null hypothesis we will need a sample saite of 296 for each sample.
+```
+
